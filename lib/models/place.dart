@@ -44,16 +44,18 @@ class Place {
   );
 
   factory Place.fromRow(Map<String, dynamic> row, {bool isFavorite = false}) {
-    return Place(
-      id: row['id'] as String,
-      userId: row['user_id'] as String,
-      title: row['title'] as String,
-      description: row['description'] as String,
-      imageUrl: row['image_url'] as String,
-      mapUrl: row['map_url'] as String,
-      createdAt: DateTime.parse(row['created_at'] as String),
-      isFavorite: isFavorite,
-    );
+      final raw = row['created_at'];
+    final dt = (raw is String) ? DateTime.parse(raw) : (raw as DateTime);
+  return Place(
+    id: row['id'] as String,
+    userId: row['user_id'] as String? ?? '',
+    title: row['title'] as String,
+    description: row['description'] as String,
+    imageUrl: row['image_url'] as String,
+    mapUrl: row['map_url'] as String,
+    createdAt: dt,
+    isFavorite: isFavorite,
+  );
   }
 
   Map<String, dynamic> toInsert() => {

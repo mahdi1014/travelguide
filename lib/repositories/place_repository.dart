@@ -16,28 +16,30 @@ Future<List<Place>> fetchPlaces({
   int limit = 20,
   String? currentUserId,
 }) async {
-  // v2.x: no generics on select()
   final builder = _db.from(_places).select();
 
-  // 🔎 Search across title OR description (case-insensitive)
-  if (search != null) {
-    final term = search.trim();
-    if (term.isNotEmpty) {
-      // postgrest OR syntax: column.op.value , column.op.value
-      // %term% pattern for substring
-      builder.or('title.ilike.%$term%,description.ilike.%$term%');
-    }
+  // Search across title OR description (case-insensitive)
+  final term = search?.trim();
+  final isSearching = term != null && term.isNotEmpty;
+  if (isSearching) {
+    // PostgREST OR syntax; parentheses are safe across versions
+    builder.or('(title.ilike.%$term%,description.ilike.%$term%)');
   }
 
-  // Pagination (newest first)
-  builder.order('created_at', ascending: false).limit(limit);
-  if (before != null) {
+  // Stable server sort (tie-breaker by id)
+  builder.order('created_at', ascending: false);
+  builder.order('id', ascending: false);
+
+  // Keyset pagination only when NOT searching (keeps search simple)
+  if (!isSearching && before != null) {
     builder.lt('created_at', before.toIso8601String());
   }
 
+  builder.limit(limit);
+
   final List<Map<String, dynamic>> rows = await builder;
 
-  // Favorites map (optional)
+  // Favorites (bulk)
   Map<String, bool> favMap = {};
   if (currentUserId != null && rows.isNotEmpty) {
     final ids = rows.map((r) => r['id'] as String).toList();
@@ -56,6 +58,53 @@ Future<List<Place>> fetchPlaces({
       .map((r) => Place.fromRow(r, isFavorite: favMap[r['id']] ?? false))
       .toList();
 }
+
+// Future<List<Place>> fetchPlaces({
+//   required String? search,
+//   DateTime? before,
+//   int limit = 20,
+//   String? currentUserId,
+// }) async {
+//   // v2.x: no generics on select()
+//   final builder = _db.from(_places).select();
+
+//   // 🔎 Search across title OR description (case-insensitive)
+//   if (search != null) {
+//     final term = search.trim();
+//     if (term.isNotEmpty) {
+//       // postgrest OR syntax: column.op.value , column.op.value
+//       // %term% pattern for substring
+//       builder.or('title.ilike.%$term%,description.ilike.%$term%');
+//     }
+//   }
+
+//   // Pagination (newest first)
+//   builder.order('created_at', ascending: false).limit(limit);
+//   if (before != null) {
+//     builder.lt('created_at', before.toIso8601String());
+//   }
+
+//   final List<Map<String, dynamic>> rows = await builder;
+
+//   // Favorites map (optional)
+//   Map<String, bool> favMap = {};
+//   if (currentUserId != null && rows.isNotEmpty) {
+//     final ids = rows.map((r) => r['id'] as String).toList();
+//     final inList = '(${ids.map((e) => '"$e"').join(',')})';
+//     final List<Map<String, dynamic>> favRows = await _db
+//         .from(_favorites)
+//         .select()
+//         .eq('user_id', currentUserId)
+//         .filter('place_id', 'in', inList);
+//     for (final r in favRows) {
+//       favMap[r['place_id'] as String] = true;
+//     }
+//   }
+
+//   return rows
+//       .map((r) => Place.fromRow(r, isFavorite: favMap[r['id']] ?? false))
+//       .toList();
+// }
 
   Future<Place> createPlace({
     required String title,
